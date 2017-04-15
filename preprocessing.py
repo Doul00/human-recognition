@@ -110,7 +110,7 @@ def compute_gradient(img):
 def get_magnitude(img, gradient_array):
     rows = img.shape[0]
     columns = img.shape[1]
-    magnitude_array = [[ 0 for j in range(columns)] for i in range(rows)]
+    magnitude_array = np.zeros((rows, columns), np.uint16)
     for i in range(0, rows):
         for j in range(0, columns):
             x_val = gradient_array[i][j][0]**2
@@ -121,7 +121,7 @@ def get_magnitude(img, gradient_array):
 def get_direction(img, gradient_array):
     rows = img.shape[0]
     columns = img.shape[1]
-    angle_array = [[ 0 for j in range(columns)] for i in range(rows)]
+    angle_array = np.zeros((rows, columns), np.uint16)
     for i in range(0, rows):
         for j in range(0, columns):
             x_val = gradient_array[i][j][0]
