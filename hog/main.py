@@ -36,9 +36,9 @@ def detect_human(img_path):
     hog_feature_vector = hog.concatenate_blocks(img_blocks)
     logging_end()
 
-    print(hog_feature_vector)
+    print(hog_feature_vector.shape)
 
-    print('DONE in {}s'.format(str(round(time.time() - begin_time, 2))))
+    logging_begin('DONE in {}s'.format(str(round(time.time() - begin_time, 3))))
     img = Image.fromarray(img)
     img.show()
 
