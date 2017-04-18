@@ -1,7 +1,7 @@
 import numpy as np
 import math
-from cell import Cell
-from cell import Block
+from .cell import Cell
+from .cell import Block
 
 
 def normalize_vector(vect):
