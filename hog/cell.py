@@ -4,6 +4,7 @@ class Cell:
         self.number = number
         self.histogram = histogram
 
+
 class Block:
 
     def __init__(self, histogram):
