@@ -1,45 +1,46 @@
 import time
 
 from PIL import Image
-import numpy
+import numpy as np
 
 from . import preprocessing
 from . import hog
 
 
-def logging_begin(msg):
-    print('## HOG: {:<10}...'.format(msg))
+def logging_begin(msg, verbose):
+    if verbose:
+        print('## HOG: {:<10}...'.format(msg))
 
 
-def logging_end():
-    print('----->  OK')
+def logging_end(verbose):
+    if verbose:
+        print('----->  OK')
 
 
-def detect_human(img_path):
+def hog_processing(img_path, verbose=False):
     begin_time = time.time()
 
-    logging_begin('Loading {}'.format(img_path))
-    img = numpy.asarray(Image.open(img_path)).copy()
-    logging_end()
+    logging_begin('Loading {}'.format(img_path), verbose)
+    img = np.asarray(Image.open(img_path)).copy()
+    shape = img.shape
+    logging_end(verbose)
 
-    logging_begin('Preprocessing')
+    logging_begin('Preprocessing', verbose)
     img = preprocessing.grayscale(img)
     img = preprocessing.bilinear_resize(img, 64, 128)
-    logging_end()
+    logging_end(verbose)
 
-    logging_begin('Computing hog')
+    logging_begin('Computing hog', verbose)
     gradient_array = preprocessing.compute_gradient(img)
     magnitude_array = preprocessing.get_magnitude(img, gradient_array)
     direction_array = preprocessing.get_direction(img, gradient_array)
     img_histogram = hog.compute_all_histograms(magnitude_array, direction_array, 8)
     img_blocks = hog.create_blocks(img_histogram, 2, 8, img.shape[0], img.shape[1])
     hog_feature_vector = hog.concatenate_blocks(img_blocks)
-    logging_end()
+    logging_end(verbose)
 
-    print(hog_feature_vector.shape)
+    logging_begin('DONE in {}s'.format(str(round(time.time() - begin_time, 3))),
+                  verbose)
 
-    logging_begin('DONE in {}s'.format(str(round(time.time() - begin_time, 3))))
-    img = Image.fromarray(img)
-    img.show()
-
+    return hog_feature_vector
 
