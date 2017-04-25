@@ -17,12 +17,11 @@ def logging_end(verbose):
         print('----->  OK')
 
 
-def hog_processing(img_path, verbose=False):
+def get_hog_features(img_path, verbose=False):
     begin_time = time.time()
 
     logging_begin('Loading {}'.format(img_path), verbose)
-    img = np.asarray(Image.open(img_path)).copy()
-    shape = img.shape
+    img = np.asarray(Image.open(img_path))[:,:,:3].copy()
     logging_end(verbose)
 
     logging_begin('Preprocessing', verbose)
