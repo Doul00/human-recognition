@@ -5,4 +5,4 @@ import sys
 import hog
 
 if __name__ == '__main__':
-    hog.detect_human(sys.argv[1], verbose=True)
+    hog.get_hog_features(sys.argv[1], verbose=True)
