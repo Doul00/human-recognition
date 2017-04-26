@@ -9,6 +9,8 @@ def normalize_vector(vect):
     """Basic normalization of a vector."""
     total = sum(elt ** 2 for elt in vect)
     norm = math.sqrt(total)
+    if int(norm) == 0:
+        norm = 1 # Workaround hack, to fix later
     vect = vect / norm
     return vect
 
