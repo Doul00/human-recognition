@@ -45,18 +45,21 @@ def get_hog_features(img_path, verbose=False):
                   verbose)
 
 
-    visualize_hog(hog_feature_vector, img)
+    if verbose:
+        visualize_hog(hog_feature_vector, img)
     return hog_feature_vector
 
 
 def visualize_hog(hog_features, img):
     dim_width  = img.shape[1]
     dim_height = img.shape[0]
+
+    zoom = 3
     img = Image.fromarray(img)
 
     cell_size = 8
     bin_size  = 9
-    rad_range = math.pi / 9
+    rad_range = 180 / 9
 
     nb_width  = dim_width // cell_size
     nb_height = dim_height // cell_size
@@ -120,13 +123,17 @@ def visualize_hog(hog_features, img):
                     continue
 
                 rad = b * rad_range + rad_range/2
+                rad_x = math.cos(rad)
+                rad_y = math.sin(rad)
                 max_vec_len = cell_size/2
+                scale = 2.5
 
-                x0 = my_x - rad * grad * max_vec_len
-                y0 = my_y - rad * grad * max_vec_len
-                x1 = my_x - rad * grad * max_vec_len
-                y1 = my_y - rad * grad * max_vec_len
+                x0 = my_x - rad_x * grad * max_vec_len * scale
+                y0 = my_y - rad_y * grad * max_vec_len * scale
+                x1 = my_x + rad_x * grad * max_vec_len * scale
+                y1 = my_y + rad_y * grad * max_vec_len * scale
 
-                draw.line([(x0, y0), (x1, y1)], fill=128, width=3)
+                draw.line([(x0, y0), (x1, y1)], fill="red")
 
+    img = img.resize((128, 256))
     img.show()
