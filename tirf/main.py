@@ -7,6 +7,7 @@ import numpy as np
 
 from . import preprocessing
 from . import hog
+from . import sift
 
 
 def logging_begin(msg, verbose):
@@ -17,6 +18,19 @@ def logging_begin(msg, verbose):
 def logging_end(verbose):
     if verbose:
         print('----->  OK')
+
+
+def get_sift_features(img_path, verbose=False):
+    begin_time = time.time()
+
+    logging_begin('Loading {}'.format(img_path), verbose)
+    img = np.asarray(Image.open(img_path))[:,:,:3].copy()
+    logging_end(verbose)
+
+    logging_begin('Preprocessing', verbose)
+    img = preprocessing.grayscale(img)
+    sift.create_sift_features(img)
+
 
 
 def get_hog_features(img_path, verbose=False):
