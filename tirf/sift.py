@@ -9,7 +9,18 @@ def create_sift_features(img):
     """
     See: http://docs.opencv.org/trunk/da/df5/tutorial_py_sift_intro.html
     """
-    print(harris_score(img))
+    harris_keypoints = filter_harris_points(compute_harris_score(img))
+    dog_keypoints = difference_of_gaussian(img)
+    contrast_keypoints = filter_low_contrast(img)
+
+    print(img.shape)
+
+    print('constrast', len(contrast_keypoints))
+    print('harris', len(harris_keypoints))
+    print('dog', len(dog_keypoints))
+    keypoints = harris_keypoints & dog_keypoints & contrast_keypoints
+    print(len(keypoints))
+
 
 def compute_octaves(img, *, sigma=1.6, octave_nb=5):
     """
@@ -42,12 +53,10 @@ def difference_of_gaussian(img):
     """
     octaves = compute_octaves(img)
     mid_octave = len(octaves) // 2
-    keypoints = [] # Are made of tuples of coordinates (x, y)
+    keypoints = set() # Are made of tuples of coordinates (x, y)
 
     rows    = img.shape[0]
     columns = img.shape[1]
-    print(rows * columns)
-    print(rows, columns)
     for y in range(1, rows-1): # We are skipping the border pixels as they
         for x in range(1, columns-1): # probably won't be keypoints.
             min_extrema = float('inf')
@@ -68,13 +77,12 @@ def difference_of_gaussian(img):
 
             if potential_keypoint >= max_extrema or\
                potential_keypoint <= min_extrema:
-                keypoints.append((x, y))
+                keypoints.add((x, y))
+
+    return keypoints
 
 
-    print(len(keypoints))
-
-
-def harris_score(img, *, sigma=1.6):
+def compute_harris_score(img, *, sigma=1.6):
     """
     Computes the harris score (from the harris corner detection algorithm)
     for each pixel.
@@ -83,8 +91,8 @@ def harris_score(img, *, sigma=1.6):
     """
     # First we are computing the derivating for each axis (x, and y) found
     # with the Taylor series.
-    i_x = filters.gaussian_filter(img, sigma=sigma, order=0)
-    i_y = filters.gaussian_filter(img, (sigma,sigma), (1,0))
+    i_x = filters.gaussian_filter1d(img, sigma=sigma, order=1, axis=0)
+    i_y = filters.gaussian_filter1d(img, sigma=sigma, order=1, axis=1)
 
     i_xx = filters.gaussian_filter(i_x * i_x, sigma)
     i_yy = filters.gaussian_filter(i_y * i_y, sigma)
@@ -96,8 +104,44 @@ def harris_score(img, *, sigma=1.6):
     #       [ IxIy  Iy^2 ]
     # With R = det M - trace(M)^2
 
-    det_M = i_xx * i_yy - i_xy ** 2
-    tr_M  = i_xx + i_yy
+    det_m = i_xx * i_yy - i_xy ** 2
+    tr_m  = i_xx + i_yy
 
     return det_m - tr_m ** 2
 
+
+def filter_harris_points(harris_scores, *, threshold=10):
+    """
+    Given a harris corner score for each pixel position, we are filtering
+    all pixel' scores that are above the @threshold.
+    """
+    filtered_coords = set()
+
+    rows    = harris_scores.shape[0]
+    columns = harris_scores.shape[1]
+    for y in range(1, rows-1):
+        for x in range(1, columns-1):
+            if harris_scores.item(y, x, 0) < threshold:
+                filtered_coords.add((x, y))
+
+    return filtered_coords
+
+
+def filter_low_contrast(img, *, threshold=0.03):
+    filtered_coords = set()
+
+    rows    = img.shape[0]
+    columns = img.shape[1]
+    for y in range(1, rows-1):
+        for x in range(1, columns-1):
+            window = img[y-1:y+2, x-1:x+2, 0]
+
+            std  = window.std()
+            if std == 0:
+                continue
+            mean = window.mean()
+
+            if abs((img.item(y, x, 0) - mean) / std) > threshold:
+                filtered_coords.add((x, y))
+
+    return filtered_coords
