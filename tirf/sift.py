@@ -9,31 +9,78 @@ def create_sift_features(img):
     """
     See: http://docs.opencv.org/trunk/da/df5/tutorial_py_sift_intro.html
     """
-    harris_keypoints = filter_harris_points(compute_harris_score(img))
-    dog_keypoints = difference_of_gaussian(img)
-    contrast_keypoints = filter_low_contrast(img)
-
     print(img.shape)
+    keypoints = difference_of_gaussian(img)
+    print('gaussian:', len(keypoints))
+    keypoints &= filter_low_contrast(img, keypoints)
+    print('contrast:', len(keypoints))
+    keypoints &= filter_harris_points(img, keypoints)
+    print('harris:', len(keypoints))
 
-    print('constrast', len(contrast_keypoints))
-    print('harris', len(harris_keypoints))
-    print('dog', len(dog_keypoints))
-    keypoints = harris_keypoints & dog_keypoints & contrast_keypoints
-    print(len(keypoints))
+    from PIL import Image
+    from PIL.ImageDraw import Draw
+    img = Image.fromarray(img)
+    draw = Draw(img)
+    for (x, y) in keypoints:
+        draw.point([(x, y)], fill="red")
+    img.show()
 
 
-def compute_octaves(img, *, sigma=1.6, octave_nb=5):
+def difference_of_gaussian(img):
+    octaves  = compute_octaves(img)
+    octaves = [difference_of_blur(octave) for octave in octaves]
+
     """
-    Computes @octave_nb octaves with a @sigma starting from 1.6 and growing
-    each time by a factor a sqrt(2).
+    from PIL import Image
+    img = Image.fromarray(octaves[0][3])
+    img.show()
+    exit()
     """
-    octaves = []
 
-    for _ in range(octave_nb):
-        octaves.append(filters.gaussian_filter(img, sigma))
-        sigma *= math.sqrt(2)
+    keypoints = set()
+    for scale_level, octave in enumerate(octaves):
+        for i in range(len(octave)-2):
+            keypoints |= {(x * 2 ** scale_level, y * 2 ** scale_level)
+                          for (x, y) in find_keypoints_extrema(octave[i:i+3])}
+
+    return keypoints
+
+def difference_of_blur(octave):
+    """
+    Returns an absolute difference between images two by two. Each image
+    belongs to the same octave (i.e. same scale) but has a different blur
+    level.
+    """
+    return [np.abs(octave[i] - octave[i+1])
+            for i in range(len(octave)-1)]
+
+
+def compute_octaves(img, *, octave_nb=4):
+    """
+    Computes @octave_nb octaves, the first image has the original size. The
+    followings are scaled down by 50% at each step.
+    """
+    octaves = [add_blur_levels(img)]
+
+    for _ in range(octave_nb-1):
+        img = scale_down(img)
+        octaves.append(add_blur_levels(img))
 
     return octaves
+
+
+def add_blur_levels(img, *, sigma=1.6, octave_size=5):
+    """
+    Computes @octave_size blurred images of a same octave with a @sigma
+    starting from 1.6 and growing each time by a factor a sqrt(2).
+    """
+    blur_levels = []
+
+    for i in range(octave_size):
+        blur_levels.append(filters.gaussian_filter(img, sigma))
+        sigma *= math.sqrt(2)
+
+    return blur_levels
 
 
 def scale_down(img):
@@ -43,40 +90,36 @@ def scale_down(img):
     return misc.imresize(img, .5)
 
 
-def difference_of_gaussian(img):
+def find_keypoints_extrema(octaves):
     """
-    Computes the Difference Of Gaussian:
-        Several octaves are made, each a gaussian blur of the precedent with
-        sigma starting from 1.6 and growing up by a factor of sqrt(2).
-        Local extrema (max or min) are selected as potential keypoints between
-        several layers of octaves.
+    Local extrema (max or min) are selected as potential keypoints between
+    a "cube" made of 3 layers of blur levels of a same octave.
     """
-    octaves = compute_octaves(img)
     mid_octave = len(octaves) // 2
-    keypoints = set() # Are made of tuples of coordinates (x, y)
+    keypoints = set()
 
-    rows    = img.shape[0]
-    columns = img.shape[1]
+    rows    = octaves[0].shape[0]
+    columns = octaves[0].shape[1]
     for y in range(1, rows-1): # We are skipping the border pixels as they
         for x in range(1, columns-1): # probably won't be keypoints.
-            min_extrema = float('inf')
-            max_extrema = float('-inf')
 
-            potential_keypoint = octaves[mid_octave].item(y, x, 0)
+            cube_center = octaves[mid_octave].item(y, x, 0)
+            flag_is_max = True
+            flag_is_min = True
 
             for yy in range(-1, 2):
                 for xx in range(-1, 2):
                     coord_y = y + yy
                     coord_x = x + xx
                     for octave in octaves:
-                        min_extrema = min(min_extrema,
-                                          octave.item(coord_y, coord_x, 0))
-                        max_extrema = max(max_extrema,
-                                          octave.item(coord_y, coord_x, 0))
+                        if octave.item(coord_y, coord_x, 0) >= cube_center:
+                            flag_is_max = False
+                        elif octave.item(coord_y, coord_x, 0) <= cube_center:
+                            flag_is_min = False
 
-
-            if potential_keypoint >= max_extrema or\
-               potential_keypoint <= min_extrema:
+                if not flag_is_max and not flag_is_min:
+                    break
+            else:
                 keypoints.add((x, y))
 
     return keypoints
@@ -110,38 +153,67 @@ def compute_harris_score(img, *, sigma=1.6):
     return det_m - tr_m ** 2
 
 
-def filter_harris_points(harris_scores, *, threshold=10):
+def filter_harris_points(img, keypoints, *, threshold=10):
     """
     Given a harris corner score for each pixel position, we are filtering
     all pixel' scores that are above the @threshold.
     """
+    harris_scores = compute_harris_score(img)
     filtered_coords = set()
 
-    rows    = harris_scores.shape[0]
-    columns = harris_scores.shape[1]
-    for y in range(1, rows-1):
-        for x in range(1, columns-1):
-            if harris_scores.item(y, x, 0) < threshold:
-                filtered_coords.add((x, y))
+    for (x, y) in keypoints:
+        if harris_scores.item(y, x, 0) < threshold:
+            filtered_coords.add((x, y))
 
     return filtered_coords
 
 
-def filter_low_contrast(img, *, threshold=0.03):
+def filter_low_contrast(img, keypoints, *, threshold=0.03):
+    """
+    Filter all keypoints that have a low contrast.
+    """
     filtered_coords = set()
 
-    rows    = img.shape[0]
-    columns = img.shape[1]
-    for y in range(1, rows-1):
-        for x in range(1, columns-1):
-            window = img[y-1:y+2, x-1:x+2, 0]
+    for (x, y) in keypoints:
+        window = img[y-1:y+2, x-1:x+2, 0]
 
-            std  = window.std()
-            if std == 0:
-                continue
-            mean = window.mean()
+        std = window.std()
+        if std == 0:
+            continue
+        mean = window.mean()
 
-            if abs((img.item(y, x, 0) - mean) / std) > threshold:
-                filtered_coords.add((x, y))
+        if abs((img.item(y, x, 0) - mean) / std) > threshold:
+            filtered_coords.add((x, y))
 
     return filtered_coords
+
+
+def create_descriptors(img, keypoints):
+    """
+    Creates a descriptor for each keypoint. It is returned under the form of
+    a dictionnary of keypoint coordinates as key, and its associated
+    descriptor as value.
+    """
+    return {keypoint: compute_descriptor(img, keypoint)
+            for keypoint in keypoint}
+
+
+def compute_descriptor(img, keypoint):
+    pass
+
+
+def compute_direction(img, coords):
+    """
+    Computes the direction for surrounding pixels.
+    """
+    return math.atan((img.item(y+1, x, 0) - img.item(y-1, x, 0)) /\
+                     (img.item(y, x+1, 0) - img.item(y, x-1, 0)))
+
+
+def compute_magnitude(img, coords):
+    """
+    Computes the magnitude for surrounding pixels.
+    """
+    x, y = coords
+    return math.sqrt((img.item(y, x-1, 0) - img.item(y, x+1, 0)) ** 2 +\
+                     (img.item(y-1, x, 0) - img.item(y+1, x, 0)) ** 2)
