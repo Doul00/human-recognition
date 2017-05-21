@@ -30,13 +30,6 @@ def difference_of_gaussian(img):
     octaves  = compute_octaves(img)
     octaves = [difference_of_blur(octave) for octave in octaves]
 
-    """
-    from PIL import Image
-    img = Image.fromarray(octaves[0][3])
-    img.show()
-    exit()
-    """
-
     keypoints = set()
     for scale_level, octave in enumerate(octaves):
         for i in range(len(octave)-2):
@@ -45,17 +38,22 @@ def difference_of_gaussian(img):
 
     return keypoints
 
+
 def difference_of_blur(octave):
     """
     Returns an absolute difference between images two by two. Each image
     belongs to the same octave (i.e. same scale) but has a different blur
     level.
     """
-    return [np.abs(octave[i] - octave[i+1])
-            for i in range(len(octave)-1)]
+    # FIXME: Explain type conversion in doc
+    octave = [np.int16(img) for img in octave]
+    diffs  = [np.abs(octave[i] - octave[i+1]) for i in range(len(octave)-1)]
+    octave = [np.uint8(img) for img in diffs]
+
+    return octave
 
 
-def compute_octaves(img, *, octave_nb=4):
+def compute_octaves(img, *, octave_nb=1):
     """
     Computes @octave_nb octaves, the first image has the original size. The
     followings are scaled down by 50% at each step.
@@ -90,20 +88,20 @@ def scale_down(img):
     return misc.imresize(img, .5)
 
 
-def find_keypoints_extrema(octaves):
+def find_keypoints_extrema(octave):
     """
     Local extrema (max or min) are selected as potential keypoints between
     a "cube" made of 3 layers of blur levels of a same octave.
     """
-    mid_octave = len(octaves) // 2
+    mid = len(octave) // 2
     keypoints = set()
 
-    rows    = octaves[0].shape[0]
-    columns = octaves[0].shape[1]
+    rows    = octave[0].shape[0]
+    columns = octave[0].shape[1]
     for y in range(1, rows-1): # We are skipping the border pixels as they
         for x in range(1, columns-1): # probably won't be keypoints.
 
-            cube_center = octaves[mid_octave].item(y, x, 0)
+            cube_center = octave[mid].item(y, x, 0)
             flag_is_max = True
             flag_is_min = True
 
@@ -111,15 +109,18 @@ def find_keypoints_extrema(octaves):
                 for xx in range(-1, 2):
                     coord_y = y + yy
                     coord_x = x + xx
-                    for octave in octaves:
-                        if octave.item(coord_y, coord_x, 0) >= cube_center:
+
+                    for i in range(len(octave)):
+                        if i == mid and\
+                           coord_x == x and coord_y == y:
+                            continue
+
+                        if octave[i].item(coord_y, coord_x, 0) >= cube_center:
                             flag_is_max = False
-                        elif octave.item(coord_y, coord_x, 0) <= cube_center:
+                        if octave[i].item(coord_y, coord_x, 0) <= cube_center:
                             flag_is_min = False
 
-                if not flag_is_max and not flag_is_min:
-                    break
-            else:
+            if flag_is_max or flag_is_min:
                 keypoints.add((x, y))
 
     return keypoints
@@ -194,8 +195,10 @@ def create_descriptors(img, keypoints):
     a dictionnary of keypoint coordinates as key, and its associated
     descriptor as value.
     """
-    return {keypoint: compute_descriptor(img, keypoint)
-            for keypoint in keypoint}
+    descriptors =  {keypoint: compute_descriptor(img, keypoint)
+                    for keypoint in keypoint}
+
+
 
 
 def compute_descriptor(img, keypoint):
