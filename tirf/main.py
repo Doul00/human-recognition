@@ -10,9 +10,10 @@ from . import hog
 from . import sift
 
 
-def logging_begin(msg, verbose):
+def logging_begin(msg, verbose, *, algo='HOG'):
+
     if verbose:
-        print('## HOG: {:<10}...'.format(msg))
+        print('## {}: {:<10}...'.format(algo, msg))
 
 
 def logging_end(verbose):
@@ -23,14 +24,18 @@ def logging_end(verbose):
 def get_sift_features(img_path, verbose=False):
     begin_time = time.time()
 
-    logging_begin('Loading {}'.format(img_path), verbose)
+    logging_begin('Loading {}'.format(img_path), verbose, algo='SIFT')
     img = np.asarray(Image.open(img_path))[:,:,:3].copy()
     logging_end(verbose)
 
-    logging_begin('Preprocessing', verbose)
+    logging_begin('Preprocessing', verbose, algo='SIFT')
     img = preprocessing.grayscale(img)
-    sift.create_sift_features(img)
+    logging_end(verbose)
 
+    sift.visualize_sift_descriptors(img)
+
+    logging_begin('DONE in {}s'.format(str(round(time.time() - begin_time, 3))),
+                  verbose)
 
 
 def get_hog_features(img_path, verbose=False):

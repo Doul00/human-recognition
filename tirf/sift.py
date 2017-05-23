@@ -1,11 +1,48 @@
 import math
+import operator
 
 import numpy as np
 from scipy import misc
 from scipy.ndimage import filters
 
 
-def create_sift_features(img):
+def get_sift_descriptors(img):
+    """
+    Returns an array made of the concatenation of all descriptors. Each
+    descriptor has a length of 128.
+    """
+    descriptors = []
+
+    for descriptor in create_sift_descriptors.values():
+        descriptors += descriptor
+
+    return descriptors
+
+
+def visualize_sift_descriptors(img, *, n=100):
+    """
+    Visualize the image with the sift descriptors.
+    """
+    from PIL import Image
+    from PIL.ImageDraw import Draw
+    image = Image.fromarray(img)
+    draw = Draw(image)
+
+    descriptors_magnitude = {
+            coords: np.sum(descriptor)
+            for coords, descriptor in create_sift_descriptors(img).items()
+    }
+    sorted_descriptors = sorted(descriptors_magnitude.items(),
+                                key=operator.itemgetter(1))
+    sorted_descriptors = sorted_descriptors[::-1]
+
+    for ((x, y), _) in sorted_descriptors[:n]:
+        #draw.point([(x, y)], fill="red")
+        draw.ellipse([(x-2, y-2), (x+2, y+2)], fill='red')
+    image.show()
+
+
+def create_sift_descriptors(img):
     """
     See: http://docs.opencv.org/trunk/da/df5/tutorial_py_sift_intro.html
     """
@@ -17,13 +54,7 @@ def create_sift_features(img):
     keypoints &= filter_harris_points(img, keypoints)
     print('harris:', len(keypoints))
 
-    from PIL import Image
-    from PIL.ImageDraw import Draw
-    img = Image.fromarray(img)
-    draw = Draw(img)
-    for (x, y) in keypoints:
-        draw.point([(x, y)], fill="red")
-    img.show()
+    return create_descriptors(img, keypoints)
 
 
 def difference_of_gaussian(img):
@@ -45,7 +76,8 @@ def difference_of_blur(octave):
     belongs to the same octave (i.e. same scale) but has a different blur
     level.
     """
-    # FIXME: Explain type conversion in doc
+    # We need to do a conversion to uint8 (unsigned) to int16 (signed)
+    # when doing the difference, or the results are fucked.
     octave = [np.int16(img) for img in octave]
     diffs  = [np.abs(octave[i] - octave[i+1]) for i in range(len(octave)-1)]
     octave = [np.uint8(img) for img in diffs]
@@ -53,7 +85,7 @@ def difference_of_blur(octave):
     return octave
 
 
-def compute_octaves(img, *, octave_nb=1):
+def compute_octaves(img, *, octave_nb=4):
     """
     Computes @octave_nb octaves, the first image has the original size. The
     followings are scaled down by 50% at each step.
@@ -195,22 +227,71 @@ def create_descriptors(img, keypoints):
     a dictionnary of keypoint coordinates as key, and its associated
     descriptor as value.
     """
-    descriptors =  {keypoint: compute_descriptor(img, keypoint)
-                    for keypoint in keypoint}
-
-
+    return {keypoint: compute_descriptor(img, keypoint)
+            for keypoint in keypoints}
 
 
 def compute_descriptor(img, keypoint):
-    pass
+    """
+    Computes a descriptor with the given keypoint.
+    The descriptor is a numerical vector of lenght 128. It is the
+    concatenation of 16 subblocks' histograms from the surronding 16x16
+    neighbours pixels. Each subblock has a size of 4x4.
+    """
+    x, y = keypoint
+    histograms = []
+
+    subblock_start = [
+            (-8, -8), (-4, -8), (0, -8), (4, -8),
+            (-8, -4), (-4, -4), (0, -4), (4, -4),
+            (-8,  0), (-4,  0), (0,  0), (4,  0),
+            (-8,  4), (-4,  4), (0,  4), (8,  4)
+    ]
+
+    for (start_x, start_y) in subblock_start:
+        histograms += create_histogram(img, x + start_x, y + start_y)
+
+    return histograms
+
+
+def create_histogram(img, x, y):
+    """
+    Creates an histogram for the given subblock.
+    @x and @y are the upper left coordinates of the subblock. The histogram
+    is divided in 8 bins, ranging from -pi/2 to pi/2.
+    """
+    nb_bins = 8
+    bins = [0 for _ in range(nb_bins)]
+
+    pi_2 = math.pi / 2
+    pi_8 = math.pi / 8
+
+    rows    = img.shape[0]
+    columns = img.shape[1]
+
+    for yy in range(y, y+5):
+        for xx in range(x, x+5):
+            if (xx < -1 or xx >= columns-1) or (yy < -1 or yy >= rows-1):
+                break
+
+            magnitude = compute_magnitude(img, (xx, yy))
+            direction = compute_direction(img, (xx, yy))
+
+            for i in range(len(bins)):
+                if direction < (-pi_2 + (i+1) * pi_8):
+                    bins[i] += magnitude
+                    break
+
+    return bins
 
 
 def compute_direction(img, coords):
     """
     Computes the direction for surrounding pixels.
     """
-    return math.atan((img.item(y+1, x, 0) - img.item(y-1, x, 0)) /\
-                     (img.item(y, x+1, 0) - img.item(y, x-1, 0)))
+    x, y = coords
+    return math.atan2((img.item(y+1, x, 0) - img.item(y-1, x, 0)),
+                      (img.item(y, x+1, 0) - img.item(y, x-1, 0)))
 
 
 def compute_magnitude(img, coords):
