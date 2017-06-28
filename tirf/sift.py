@@ -13,7 +13,7 @@ def get_sift_descriptors(img):
     """
     descriptors = []
 
-    for descriptor in create_sift_descriptors.values():
+    for descriptor in create_sift_descriptors(img).values():
         descriptors += descriptor
 
     return descriptors
@@ -34,10 +34,8 @@ def visualize_sift_descriptors(img, *, n=100):
     }
     sorted_descriptors = sorted(descriptors_magnitude.items(),
                                 key=operator.itemgetter(1))
-    sorted_descriptors = sorted_descriptors[::-1]
 
-    for ((x, y), _) in sorted_descriptors[:n]:
-        #draw.point([(x, y)], fill="red")
+    for ((x, y), _) in sorted_descriptors[-n:]:
         draw.ellipse([(x-2, y-2), (x+2, y+2)], fill='red')
     image.show()
 
@@ -46,13 +44,9 @@ def create_sift_descriptors(img):
     """
     See: http://docs.opencv.org/trunk/da/df5/tutorial_py_sift_intro.html
     """
-    print(img.shape)
     keypoints = difference_of_gaussian(img)
-    print('gaussian:', len(keypoints))
     keypoints &= filter_low_contrast(img, keypoints)
-    print('contrast:', len(keypoints))
-    keypoints &= filter_harris_points(img, keypoints)
-    print('harris:', len(keypoints))
+    #keypoints &= filter_harris_points(img, keypoints)
 
     return create_descriptors(img, keypoints)
 

@@ -5,4 +5,5 @@ import sys
 import tirf
 
 if __name__ == '__main__':
-    tirf.get_hog_features(sys.argv[1], verbose=True)
+    #tirf.get_hog_features(sys.argv[1], verbose=True)
+    tirf.get_sift_features(sys.argv[1], verbose=True)
