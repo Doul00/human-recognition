@@ -64,8 +64,6 @@ def get_hog_features(img_path, verbose=False):
                   verbose)
 
 
-    if verbose:
-        visualize_hog(hog_feature_vector, img)
     return hog_feature_vector
 
 
@@ -155,4 +153,4 @@ def visualize_hog(hog_features, img):
                 draw.line([(x0, y0), (x1, y1)], fill="red")
 
     img = img.resize((128, 256))
-    img.show()
+    return img

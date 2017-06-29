@@ -6,15 +6,22 @@ from scipy import misc
 from scipy.ndimage import filters
 
 
-def get_sift_descriptors(img):
+def get_sift_descriptors(img, *, n=100):
     """
     Returns an array made of the concatenation of all descriptors. Each
     descriptor has a length of 128.
     """
     descriptors = []
 
-    for descriptor in create_sift_descriptors(img).values():
-        descriptors += descriptor
+    descriptors_magnitude = {
+            coords: np.sum(descriptor)
+            for coords, descriptor in create_sift_descriptors(img).items()
+    }
+    sorted_descriptors = sorted(descriptors_magnitude.items(),
+                                key=operator.itemgetter(1))
+
+    for descriptor in sorted_descriptors[-n:]:
+        descriptors.append(descriptor[1])
 
     return descriptors
 
@@ -37,7 +44,7 @@ def visualize_sift_descriptors(img, *, n=100):
 
     for ((x, y), _) in sorted_descriptors[-n:]:
         draw.ellipse([(x-2, y-2), (x+2, y+2)], fill='red')
-    image.show()
+    return image
 
 
 def create_sift_descriptors(img):
